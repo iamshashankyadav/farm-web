@@ -40,7 +40,8 @@ test.describe('public pages and sign-in', () => {
     await expect(page).toHaveURL(/\/farmer\/listings/)
     await page.goto('/admin/dashboard')
     await expect(page).not.toHaveURL(/\/admin\//) // the guard sends a farmer back to their own section
-    await page.getByRole('button', { name: 'Sign out' }).first().click()
+    await page.getByRole('button', { name: 'Account' }).locator('visible=true').click()
+    await page.getByRole('menuitem', { name: 'Sign out' }).click()
     await page.goto('/farmer/orders')
     await expect(page).toHaveURL(/\/login/)
   })

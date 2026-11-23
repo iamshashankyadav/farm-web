@@ -5,13 +5,12 @@ import { useAuth } from '@/features/auth/authContext'
 import { websiteRoles } from '@/features/auth/roles'
 import { useUnreadCount } from '@/features/notifications/notifications'
 import { useCart } from '@/features/shop/shop'
-import { LanguageSwitch } from '@/i18n/I18nProvider'
 import { useI18n } from '@/i18n/i18n'
 import type { Section, SectionPage } from '@/routes/types'
 import { sectionByRole } from '@/routes/sections'
 import { Logo } from './BrandMark'
 import { Icon } from './Icon'
-import { ThemeToggle } from './ThemeSwitch'
+import { ProfileMenu } from './ProfileMenu'
 
 /** The most tabs the phone bar shows; the rest go under "More". */
 const MAX_TABS = 5
@@ -47,37 +46,6 @@ function WorkspaceSwitch({ current }: { current: Section }) {
         </Link>
       ))}
     </nav>
-  )
-}
-
-/** Name, profile, sign out, theme and language: the same block in the sidebar and the phone menu. */
-function Account({ onNavigate }: { onNavigate?: () => void }) {
-  const { user, logout } = useAuth()
-  const { t } = useI18n()
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-2.5">
-        <span className="grid size-8 shrink-0 place-items-center rounded-full bg-surface-container-high text-sm font-semibold">
-          {(user?.name ?? '?').charAt(0).toUpperCase()}
-        </span>
-        <span className="min-w-0">
-          <span className="block truncate text-sm font-medium">{user?.name}</span>
-          <span className="block truncate text-xs text-on-surface-variant">{user?.phone}</span>
-        </span>
-      </div>
-      <div className="flex gap-1 text-sm">
-        <Link to="/profile" onClick={onNavigate} className="rounded-md px-2 py-1 text-on-surface-variant hover:bg-surface-container hover:text-on-surface">
-          {t('Profile')}
-        </Link>
-        <button type="button" onClick={() => void logout()} className="rounded-md px-2 py-1 text-on-surface-variant hover:bg-surface-container hover:text-on-surface">
-          {t('Sign out')}
-        </button>
-      </div>
-      <div className="flex items-center justify-between gap-2">
-        <ThemeToggle className="-ml-2" />
-        <LanguageSwitch />
-      </div>
-    </div>
   )
 }
 
@@ -130,9 +98,6 @@ export function RoleLayout({ section }: { section: Section }) {
             </NavLink>
           ))}
         </nav>
-        <div className="mt-auto border-t border-border px-2 pt-4">
-          <Account />
-        </div>
       </aside>
 
       {/* Phone top bar */}
@@ -152,19 +117,16 @@ export function RoleLayout({ section }: { section: Section }) {
               {unread > 0 && <span aria-hidden="true" className="absolute top-2 right-2 size-2 rounded-full bg-primary" />}
             </NavLink>
           )}
-          <button
-            type="button"
-            onClick={() => setMenuOpen(true)}
-            aria-label={t('Account')}
-            className="grid size-9 place-items-center rounded-full bg-surface-container-high text-sm font-semibold"
-          >
-            {(user?.name ?? '?').charAt(0).toUpperCase()}
-          </button>
+          <ProfileMenu />
         </div>
       </header>
 
       <div className="lg:pl-60">
-        <main className="mx-auto w-full max-w-6xl px-4 pt-6 pb-28 sm:px-8 lg:pt-10 lg:pb-16">
+        {/* Desktop top bar: profile menu at the top right */}
+        <header className="sticky top-0 z-40 hidden h-14 items-center justify-end border-b border-border bg-header px-8 backdrop-blur lg:flex">
+          <ProfileMenu />
+        </header>
+        <main className="mx-auto w-full max-w-6xl px-4 pt-6 pb-28 sm:px-8 lg:pt-8 lg:pb-16">
           {section.role === 'farmer' && user && !user.farmerVerified && (
             <p role="note" className="mb-6 rounded-md border border-secondary/30 bg-secondary/8 px-4 py-3 text-sm">
               <strong className="font-semibold">{t('Waiting for verification')}.</strong>{' '}
@@ -226,7 +188,7 @@ export function RoleLayout({ section }: { section: Section }) {
         </nav>
       )}
 
-      {/* Phone menu: pages that did not fit, workspace switch and account */}
+      {/* Phone menu: pages that did not fit and the workspace switch */}
       <AnimatePresence>
         {menuOpen && (
           <div className="fixed inset-0 z-50 lg:hidden">
@@ -262,9 +224,6 @@ export function RoleLayout({ section }: { section: Section }) {
                   ))}
                 </nav>
               )}
-              <div className="border-t border-border pt-4">
-                <Account onNavigate={() => setMenuOpen(false)} />
-              </div>
             </motion.div>
           </div>
         )}
