@@ -1,5 +1,6 @@
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
+import { normalize, suggest } from '@/features/catalog/suggest'
 import { ErrorState } from '@/components/ui'
 import { Icon } from '@/components/Icon'
 import { useI18n } from '@/i18n/i18n'
@@ -51,7 +52,31 @@ export function ShopBrowser({ cartPath }: { cartPath: string }) {
   })
 
   const all = useMemo(() => search.data?.pages.flatMap((p) => p.items) ?? [], [search.data])
-  const items = useMemo(() => refine(all, { category, text, crops: crops.data }), [all, category, text, crops.data])
+  const [openList, setOpenList] = useState(false)
+  const [active, setActive] = useState(-1)
+  // Words to suggest from: crops, varieties, farms and places that exist in this list.
+  const vocabulary = useMemo(() => {
+    const words = new Set<string>()
+    for (const c of crops.data ?? []) words.add(c.name)
+    for (const p of all) for (const w of [p.cropName, p.variety, p.farmName, p.village, p.district]) if (w) words.add(w)
+    return [...words]
+  }, [all, crops.data])
+  const suggestions = useMemo(() => suggest(text, vocabulary), [text, vocabulary])
+  const items = useMemo(() => {
+    const direct = refine(all, { category, text, crops: crops.data })
+    if (direct.length > 0 || !normalize(text)) return direct
+    // Nothing contains the typed letters ("mng"): show what the closest suggestions point at (Mango).
+    const near = new Set(suggestions.map((sg) => normalize(sg.text)))
+    return refine(all, { category, text: '', crops: crops.data }).filter((p) =>
+      [p.cropName, p.variety, p.farmName, p.village, p.district].some((w) => w && near.has(normalize(w))),
+    )
+  }, [all, category, text, crops.data, suggestions])
+  const showList = openList && text.trim().length >= 2 && suggestions.length > 0
+  function pick(word: string) {
+    setText(word)
+    setOpenList(false)
+    setActive(-1)
+  }
   const categories = useMemo(() => {
     const byId = new Map((crops.data ?? []).map((c) => [c.id, c.category]))
     const count = new Map<string, number>()
@@ -94,11 +119,67 @@ export function ShopBrowser({ cartPath }: { cartPath: string }) {
   return (
     <div className="mt-6">
       <div className="card space-y-4 p-3.5 sm:p-4">
-        <label className="relative block">
-          <span className="sr-only">{t('Search produce, farms or villages')}</span>
-          <Icon name="search" className="pointer-events-none absolute top-1/2 left-3 size-5 -translate-y-1/2 text-ink-soft" />
-          <input type="search" value={text} onChange={(e) => setText(e.target.value)} placeholder={t('Search tomato, a farm, a village…')} className="input pl-10" />
-        </label>
+        <div className="relative">
+          <label className="relative block">
+            <span className="sr-only">{t('Search produce, farms or villages')}</span>
+            <Icon name="search" className="pointer-events-none absolute top-1/2 left-3 size-5 -translate-y-1/2 text-ink-soft" />
+            <input
+              type="search"
+              role="combobox"
+              aria-expanded={showList}
+              aria-controls="shop-suggestions"
+              aria-autocomplete="list"
+              aria-activedescendant={active >= 0 ? `shop-suggestion-${active}` : undefined}
+              autoComplete="off"
+              value={text}
+              onChange={(e) => {
+                setText(e.target.value)
+                setOpenList(true)
+                setActive(-1)
+              }}
+              onFocus={() => setOpenList(true)}
+              onBlur={() => window.setTimeout(() => setOpenList(false), 120)}
+              onKeyDown={(e) => {
+                if (e.key === 'ArrowDown' && suggestions.length) {
+                  e.preventDefault()
+                  setOpenList(true)
+                  setActive((a) => (a + 1) % suggestions.length)
+                } else if (e.key === 'ArrowUp' && suggestions.length) {
+                  e.preventDefault()
+                  setActive((a) => (a <= 0 ? suggestions.length - 1 : a - 1))
+                } else if (e.key === 'Escape') {
+                  setOpenList(false)
+                } else if (e.key === 'Enter' && suggestions[active]) {
+                  e.preventDefault()
+                  pick(suggestions[active]!.text)
+                }
+              }}
+              placeholder={t('Search tomato, a farm, a village…')}
+              className="input pl-10"
+            />
+          </label>
+          {showList && (
+            <ul id="shop-suggestions" role="listbox" aria-label={t('Suggestions')} className="absolute top-full right-0 left-0 z-30 mt-1.5 overflow-hidden rounded-xl border border-line bg-white py-1 shadow-xl">
+              {suggestions.map((sg, i) => (
+                <li
+                  key={sg.text}
+                  id={`shop-suggestion-${i}`}
+                  role="option"
+                  aria-selected={i === active}
+                  onMouseDown={(e) => {
+                    e.preventDefault()
+                    pick(sg.text)
+                  }}
+                  onMouseEnter={() => setActive(i)}
+                  className={`flex cursor-pointer items-center gap-3 px-4 py-2 ${i === active ? 'bg-paper text-ink' : 'text-ink-soft'}`}
+                >
+                  <Icon name="search" className="size-4 shrink-0" />
+                  <span>{sg.text}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
 
         <div className="flex flex-wrap items-end gap-x-4 gap-y-3">
           <label className="grid gap-1 text-sm font-semibold">

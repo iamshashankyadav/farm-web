@@ -24,6 +24,7 @@ export const HI_SHOP: Record<string, string> = {
   // browse
   'Search produce, farms or villages': 'उपज, खेत या गाँव खोजें',
   'Search tomato, a farm, a village…': 'टमाटर, कोई खेत या गाँव खोजें…',
+  'Suggestions': 'सुझाव',
   'Deliver to': 'डिलीवरी का शहर',
   'My location': 'मेरी जगह',
   'Use my location': 'मेरी जगह इस्तेमाल करें',
