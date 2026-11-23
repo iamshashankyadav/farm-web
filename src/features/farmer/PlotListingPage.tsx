@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { api, ApiError } from '@/api/http'
 import { OwnerPhotos } from '@/components/OwnerPhotos'
+import { PlaceSearch } from '@/components/PlaceSearch'
 import { ErrorState, ListSkeleton, StatusChip } from '@/components/ui'
 import { useAuth } from '@/features/auth/authContext'
 import { day, landApi, rupees, type Crop } from '@/features/customer/land'
@@ -14,6 +15,12 @@ const SEASON_NAMES = ['Kharif', 'Rabi', 'Zaid', 'Summer', 'Winter']
 
 function errorMessage(error: unknown) {
   if (error instanceof ApiError) {
+    if (Array.isArray(error.details) && error.details.length) {
+      const fields = (error.details as { field?: string; message?: string }[])
+        .map((d) => `${(d.field ?? '').replace(/^body\./, '')}: ${d.message ?? ''}`)
+        .join('; ')
+      return `${error.message} (${fields})`
+    }
     const details = error.details as { plotId?: string } | undefined
     return details?.plotId ? `${error.message} (overlapping plot: ${details.plotId})` : error.message
   }
@@ -339,6 +346,7 @@ function NewPlotForm({
   const refresh = useRefreshPlots()
   const mapElement = useRef<HTMLDivElement>(null)
   const drawnLayers = useRef<LeafletFeatureGroup | null>(null)
+  const mapRef = useRef<LeafletMap | null>(null)
   const [boundary, setBoundary] = useState<Polygon | null>(null)
   const [mapError, setMapError] = useState(() =>
     typeof window === 'undefined' || !window.L ? 'The map library could not load. Refresh the page and try again.' : '',
@@ -356,6 +364,7 @@ function NewPlotForm({
     if (!mapElement.current || !L) return
 
     const map = L.map(mapElement.current).setView([20.5937, 78.9629], 5)
+    mapRef.current = map
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       attribution: '&copy; OpenStreetMap contributors',
@@ -378,6 +387,7 @@ function NewPlotForm({
 
     return () => {
       drawnLayers.current = null
+      mapRef.current = null
       map.remove()
     }
   }, [])
@@ -438,6 +448,9 @@ function NewPlotForm({
             <p className="mt-1 text-sm text-ink-soft">Use the polygon tool on the map. Tap to add corners, then tap the first corner again to close the shape.</p>
           </div>
           <StatusChip tone={boundary ? 'good' : 'neutral'}>{boundary ? 'Boundary drawn' : 'No boundary yet'}</StatusChip>
+        </div>
+        <div className="mt-4">
+          <PlaceSearch onPick={(place) => mapRef.current?.flyTo([place.lat, place.lng], 16)} />
         </div>
         <div ref={mapElement} className="mt-4 h-[320px] w-full overflow-hidden rounded-lg border border-line sm:h-[360px]" />
         {mapError && (

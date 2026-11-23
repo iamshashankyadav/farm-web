@@ -63,7 +63,7 @@ export function PlotMap({ plots, selectedId, onSelect, onBoundsChange, focus }: 
       {
         style: (f) => {
           const selected = f?.properties?.plotSeasonId === selectedId
-          return { color: selected ? '#ffb95f' : '#53e193', weight: selected ? 4 : 2, fillOpacity: selected ? 0.45 : 0.25 }
+          return { color: selected ? '#ee9800' : '#2ec47a', weight: selected ? 4 : 2, fillOpacity: selected ? 0.45 : 0.25 }
         },
         onEachFeature: (f, l) => l.on({ click: () => f.properties?.plotSeasonId && onPick.current(f.properties.plotSeasonId) }),
       },
@@ -76,5 +76,5 @@ export function PlotMap({ plots, selectedId, onSelect, onBoundsChange, focus }: 
     }
   }, [plots, selectedId])
 
-  return <div ref={el} className="h-80 w-full overflow-hidden rounded-2xl lg:h-[34rem]" role="region" aria-label="Map of available plots" />
+  return <div ref={el} className="h-80 w-full overflow-hidden rounded-2xl lg:h-[620px]" role="region" aria-label="Map of available plots" />
 }
