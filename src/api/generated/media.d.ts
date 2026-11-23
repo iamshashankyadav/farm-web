@@ -188,7 +188,7 @@ export interface components {
             id: string;
             /**
              * Isgeoverified
-             * @description False shows an 'unverified' badge
+             * @description Whether the photo's GPS lies near the farm or plot. Informational; clients do not show it
              */
             isGeoVerified: boolean;
             /** Originalurl */
@@ -258,7 +258,7 @@ export interface components {
             id: string;
             /**
              * Isgeoverified
-             * @description False shows an 'unverified' badge
+             * @description Whether the photo's GPS lies near the farm or plot. Informational; clients do not show it
              */
             isGeoVerified: boolean;
             /**
