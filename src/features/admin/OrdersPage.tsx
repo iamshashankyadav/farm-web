@@ -96,7 +96,10 @@ function Row({ order }: { order: OrderSummary }) {
           </p>
           <p className="text-sm text-ink-soft">Placed {day(order.createdAt)}</p>
         </div>
-        <StatusChip tone={tone(order.status)}>{STATUS_TEXT[order.status]}</StatusChip>
+        <span className="flex flex-wrap gap-1.5">
+          {order.deliveryMode === 'FLEXIBLE' && <StatusChip tone="neutral">Shared delivery</StatusChip>}
+          <StatusChip tone={tone(order.status)}>{STATUS_TEXT[order.status]}</StatusChip>
+        </span>
       </div>
       <div className="mt-3">
         <StatusRail stage={stage} total={STAGES.length} label={order.status === 'CANCELLED' ? 'Cancelled' : `Stage ${stage} of ${STAGES.length}: ${STAGES[stage - 1]}`} />

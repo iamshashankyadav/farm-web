@@ -55,6 +55,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/offers/mine": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Open route offers for the signed-in delivery partner */
+        get: operations["my_offers_offers_mine_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/offers/{pool_id}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Take an offered route; the first partner to accept gets it */
+        post: operations["accept_route_offer_offers__pool_id__accept_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/offers/{pool_id}/decline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Turn an offered route down */
+        post: operations["decline_route_offer_offers__pool_id__decline_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/orders/{order_id}/track": {
         parameters: {
             query?: never;
@@ -96,6 +147,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/pools/batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The shared-delivery batch waiting for its next run (preview, creates nothing)
+         * @description FLEXIBLE orders that are packed and waiting, and how the next run would group them.
+         */
+        get: operations["batch_preview_pools_batch_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/pools/run": {
         parameters: {
             query?: never;
@@ -108,6 +179,8 @@ export interface paths {
         /**
          * Run the pooling job for a given date
          * @description Fetch READY_FOR_DISPATCH orders, cluster them, persist pools, publish pool.assigned.
+         *
+         *     With mode=FLEXIBLE this is the daily shared-delivery batch run by hand ("run the batch now").
          */
         post: operations["run_pools_pools_run_post"];
         delete?: never;
@@ -188,6 +261,57 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** BatchOrderOut */
+        BatchOrderOut: {
+            /** Address */
+            address?: string | null;
+            /** Deliverydate */
+            deliveryDate?: string | null;
+            /**
+             * Orderid
+             * Format: uuid
+             */
+            orderId: string;
+            /**
+             * Route
+             * @description Which of the estimated routes it would ride (1-based)
+             */
+            route: number;
+            /** Weightkg */
+            weightKg: number;
+        };
+        /**
+         * BatchPreview
+         * @description The shared-delivery batch as it would run now (nothing is created).
+         */
+        BatchPreview: {
+            /**
+             * Batchtime
+             * @description Daily run time, India, HH:MM
+             */
+            batchTime: string;
+            /**
+             * Dueorders
+             * @description Of those, how many the next run would take (due by then)
+             */
+            dueOrders: number;
+            /** Estimatedroutes */
+            estimatedRoutes: number;
+            /**
+             * Nextrunat
+             * Format: date-time
+             */
+            nextRunAt: string;
+            /** Orders */
+            orders: components["schemas"]["BatchOrderOut"][];
+            /** Totalweightkg */
+            totalWeightKg: number;
+            /**
+             * Waitingorders
+             * @description FLEXIBLE orders packed and waiting
+             */
+            waitingOrders: number;
+        };
         /** DeliverIn */
         DeliverIn: {
             /** Deliveredat */
@@ -228,6 +352,74 @@ export interface components {
             /** Speedms */
             speedMs?: number | null;
         };
+        /**
+         * OfferOut
+         * @description A pool offered to the signed-in partner, still open (nobody has accepted it).
+         */
+        OfferOut: {
+            /**
+             * Distancekm
+             * @description From the partner to the first pickup
+             */
+            distanceKm?: number | null;
+            /** Dropcount */
+            dropCount: number;
+            /**
+             * Expiresat
+             * @description Answer by this time; it stays open until someone accepts
+             */
+            expiresAt?: string | null;
+            firstPickup?: components["schemas"]["OfferPlace"] | null;
+            /**
+             * Offeredat
+             * Format: date-time
+             */
+            offeredAt: string;
+            /** Pickupcount */
+            pickupCount: number;
+            /**
+             * Pooldate
+             * Format: date
+             */
+            poolDate: string;
+            /**
+             * Poolid
+             * Format: uuid
+             */
+            poolId: string;
+            /** Stopcount */
+            stopCount: number;
+            /**
+             * Stops
+             * @description Every stop in driving order, to draw the route
+             */
+            stops?: components["schemas"]["OfferStop"][];
+            /** Totalkm */
+            totalKm?: number | null;
+        };
+        /** OfferPlace */
+        OfferPlace: {
+            /** Address */
+            address?: string | null;
+            /** Lat */
+            lat: number;
+            /** Lng */
+            lng: number;
+        };
+        /**
+         * OfferStop
+         * @description One stop of an offered route, in driving order. No address or customer: the partner has
+         *     not taken the route yet, so they only see where it goes.
+         */
+        OfferStop: {
+            /** Lat */
+            lat: number;
+            /** Lng */
+            lng: number;
+            /** Seq */
+            seq: number;
+            stopType: components["schemas"]["StopType"];
+        };
         /** PickupIn */
         PickupIn: {
             /** Collectedat */
@@ -260,6 +452,14 @@ export interface components {
              * Format: date
              */
             poolDate: string;
+            /**
+             * Routepath
+             * @description The road line through the stops in visiting order, as [lat, lng] pairs. Only sent by GET /my-route and when accepting an offer, and only when the routing engine found it; otherwise the client joins the stops with straight lines.
+             */
+            routePath?: [
+                number,
+                number
+            ][] | null;
             status: components["schemas"]["PoolStatus"];
             /** Stops */
             stops?: components["schemas"]["StopOut"][];
@@ -486,6 +686,93 @@ export interface operations {
             };
         };
     };
+    my_offers_offers_mine_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OfferOut"][];
+                };
+            };
+        };
+    };
+    accept_route_offer_offers__pool_id__accept_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pool_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PoolOut"];
+                };
+            };
+            /** @description POOL_TAKEN: another partner accepted first */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    decline_route_offer_offers__pool_id__decline_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pool_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     track_order_orders__order_id__track_get: {
         parameters: {
             query?: never;
@@ -549,11 +836,33 @@ export interface operations {
             };
         };
     };
+    batch_preview_pools_batch_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BatchPreview"];
+                };
+            };
+        };
+    };
     run_pools_pools_run_post: {
         parameters: {
             query?: {
                 /** @description Date to pool orders for (default: today in India) */
                 pool_date?: string;
+                /** @description Pool only IMMEDIATE or only FLEXIBLE (the shared-delivery batch) orders; both when omitted */
+                mode?: ("IMMEDIATE" | "FLEXIBLE") | null;
             };
             header?: never;
             path?: never;

@@ -6,7 +6,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { ErrorState, ListSkeleton, StatusChip, StatusRail } from '@/components/ui'
 import type { OrderStatus, OrderSummary } from '@/features/farmer/orders'
 import { useI18n } from '@/i18n/i18n'
-import { canCancel, customerOrdersApi, JOURNEY, journeyStep, ORDER_TEXT, rupees } from './shop'
+import { canCancel, customerOrdersApi, JOURNEY, journeyStep, ORDER_TEXT, rupees, waitsForBatch, whenParts } from './shop'
 
 const TABS = [
   { id: 'open', label: 'In progress', test: (s: OrderStatus) => s !== 'COMPLETED' && s !== 'CANCELLED' && s !== 'DELIVERED' },
@@ -75,6 +75,7 @@ function OrderCard({ summary: o, open, onToggle }: { summary: OrderSummary; open
   const { t } = useI18n()
   const text = ORDER_TEXT[o.status]
   const step = journeyStep(o.status)
+  const waiting = waitsForBatch(o)
   return (
     <article className="card overflow-hidden">
       <button type="button" onClick={onToggle} aria-expanded={open} className="w-full p-4 text-left sm:p-5">
@@ -88,14 +89,19 @@ function OrderCard({ summary: o, open, onToggle }: { summary: OrderSummary; open
               {t('Placed {d}', { d: when(o.createdAt) })} · #{o.id.slice(0, 8)}
             </span>
           </span>
-          <StatusChip tone={text.tone}>{t(text.label)}</StatusChip>
+          <span className="flex flex-wrap gap-1.5">
+            {o.deliveryMode === 'FLEXIBLE' && <StatusChip tone="neutral">{t('Shared delivery')}</StatusChip>}
+            <StatusChip tone={text.tone}>{t(text.label)}</StatusChip>
+          </span>
         </span>
         {o.status !== 'CANCELLED' && (
           <span className="mt-3 block">
             <StatusRail stage={step} total={JOURNEY.length} label={t(text.label)} />
           </span>
         )}
-        <span className="mt-2 block text-sm text-ink-soft">{t(text.next)}</span>
+        <span className="mt-2 block text-sm text-ink-soft">
+          {waiting && o.batchAt ? t('Shared delivery: it leaves in our batch {when}, together with other orders near you.', { when: t(...whenParts(o.batchAt)) }) : t(text.next)}
+        </span>
       </button>
       {open && <OrderDetailPanel id={o.id} />}
     </article>

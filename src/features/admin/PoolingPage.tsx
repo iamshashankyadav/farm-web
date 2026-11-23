@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { ApiError } from '@/api/http'
-import { adminApi, orderedStops, POOL_STATUS, poolSummary, todayISO, type Pool } from './admin'
+import { adminApi, orderedStops, POOL_STATUS, poolSummary, todayISO, type BatchPreview, type Pool } from './admin'
 import { PoolMap } from './PoolMap'
 
 /** The gateway answers 404 for a route the logistics service does not have yet, 502/503 when it is down. */
@@ -18,6 +18,16 @@ export function PoolingPage() {
     mutationFn: () => adminApi.runPooling(date),
     onSuccess: (data) => {
       queryClient.setQueryData(['pools', date], data)
+      setSelected(data[0]?.id ?? null)
+    },
+  })
+
+  const batch = useQuery({ queryKey: ['pool-batch'], queryFn: adminApi.batch, retry: false, refetchInterval: 60_000 })
+  const runBatch = useMutation({
+    mutationFn: () => adminApi.runBatch(date),
+    onSuccess: (data) => {
+      void queryClient.invalidateQueries({ queryKey: ['pools'] })
+      void queryClient.invalidateQueries({ queryKey: ['pool-batch'] })
       setSelected(data[0]?.id ?? null)
     },
   })
@@ -55,6 +65,8 @@ export function PoolingPage() {
           Groups orders due on this date whose drop points are within about 3 km into one route per vehicle.
         </p>
       </div>
+
+      <BatchPanel preview={batch.data} loading={batch.isPending} failed={batch.isError} running={runBatch.isPending} created={runBatch.data?.length} onRun={() => runBatch.mutate()} />
 
       {error && (
         <p role="alert" className="font-semibold text-danger">
@@ -118,6 +130,85 @@ export function PoolingPage() {
         )
       )}
     </div>
+  )
+}
+
+const clock = (hhmm: string) => {
+  const [h, m] = hhmm.split(':').map(Number)
+  return `${h! % 12 || 12}:${String(m).padStart(2, '0')} ${h! < 12 ? 'am' : 'pm'}`
+}
+
+/** Orders whose customers chose "I can wait": held until the daily run, then grouped by neighbourhood. */
+function BatchPanel({
+  preview,
+  loading,
+  failed,
+  running,
+  created,
+  onRun,
+}: {
+  preview?: BatchPreview
+  loading: boolean
+  failed: boolean
+  running: boolean
+  created?: number
+  onRun: () => void
+}) {
+  if (failed) return null // an older logistics service without the batch: the rest of the page still works
+  const routes = new Map<number, BatchPreview['orders']>()
+  for (const o of preview?.orders ?? []) routes.set(o.route, [...(routes.get(o.route) ?? []), o])
+  return (
+    <section aria-labelledby="batch-title" className="card space-y-3 p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 id="batch-title" className="font-display text-xl">
+            Shared-delivery batch
+          </h2>
+          <p className="text-sm text-ink-soft">
+            Orders whose customers chose “I can wait” are held and grouped by neighbourhood once a day
+            {preview ? `, at ${clock(preview.batchTime)}` : ''}, so one partner serves each area.
+          </p>
+        </div>
+        <button type="button" onClick={onRun} disabled={running || loading || !preview?.dueOrders} className="btn-primary">
+          {running ? 'Running…' : 'Run the batch now'}
+        </button>
+      </div>
+      {loading ? (
+        <p className="text-sm text-ink-soft">Checking the waiting orders…</p>
+      ) : (
+        preview && (
+          <>
+            <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4" aria-label="Batch summary">
+              <Stat label="Waiting" value={String(preview.waitingOrders)} />
+              <Stat label="Due at the next run" value={String(preview.dueOrders)} />
+              <Stat label="Routes it would make" value={String(preview.estimatedRoutes)} strong />
+              <Stat label="Weight" value={`${preview.totalWeightKg} kg`} />
+            </dl>
+            {created !== undefined && (
+              <p role="status" className="text-sm font-semibold text-primary">
+                {created === 1 ? '1 route was created.' : `${created} routes were created.`} Partners have been offered them.
+              </p>
+            )}
+            {preview.dueOrders === 0 ? (
+              <p className="text-sm text-ink-soft">
+                {preview.waitingOrders ? 'Everything waiting is due on a later day.' : 'No packed orders are waiting for the batch.'}
+              </p>
+            ) : (
+              <ul className="grid gap-2 sm:grid-cols-2" aria-label="Routes the next run would make">
+                {[...routes.entries()].map(([n, orders]) => (
+                  <li key={n} className="rounded-lg bg-paper px-3 py-2 text-sm">
+                    <span className="font-semibold">
+                      Route {n}: {orders.length === 1 ? '1 delivery' : `${orders.length} deliveries`}
+                    </span>
+                    <span className="block text-ink-soft">{orders.map((o) => o.address).filter(Boolean).slice(0, 3).join(' · ')}{orders.length > 3 ? ' …' : ''}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
+        )
+      )}
+    </section>
   )
 }
 
