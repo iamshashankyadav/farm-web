@@ -52,22 +52,6 @@ export const mediaApi = {
 /** Still being checked: poll until every photo has a verdict. */
 export const isProcessing = (m: Media) => m.status === 'PENDING_UPLOAD' || m.status === 'PROCESSING'
 
-/** The badge a photo carries: verified, unverified (with the reason) or still being checked. */
-export function photoBadge(m: Media): { kind: 'checking' | 'verified' | 'unverified' | 'failed'; label: string; detail: string } {
-  if (isProcessing(m)) return { kind: 'checking', label: 'Checking', detail: 'Reading the photo’s location and time.' }
-  if (m.status !== 'READY') return { kind: 'failed', label: 'Not accepted', detail: m.rejectReason ?? 'The photo could not be processed.' }
-  // Listing and farm photos are checked against the farm, crop photos against the plot.
-  const place = m.ownerType === 'PLOT' || m.ownerType === 'RESERVATION' ? 'plot' : 'farm'
-  if (m.isGeoVerified) return { kind: 'verified', label: 'Verified', detail: `Taken at the ${place}.` }
-  const detail =
-    m.geoStatus === 'TOO_FAR' && m.distanceM !== null
-      ? `Taken ${formatDistance(m.distanceM)} from the ${place}.`
-      : m.geoStatus === 'NO_GPS'
-        ? 'The photo has no location. Turn on location for your camera.'
-        : 'The location could not be checked.'
-  return { kind: 'unverified', label: 'Unverified', detail }
-}
-
 export function formatDistance(metres: number) {
   return metres >= 1000 ? `${(metres / 1000).toFixed(1)} km` : `${Math.round(metres)} m`
 }

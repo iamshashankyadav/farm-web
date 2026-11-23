@@ -1,6 +1,6 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { photoBadge, type Media } from '@/api/media'
+import { type Media } from '@/api/media'
 import { session } from '@/features/auth/session'
 import { jsonResponse, mockApi, renderAt, tokens } from '@/test/auth'
 import { farmPayload, isLowStock, listingChanges, listingPayload, type Listing, type ListingForm } from './catalog'
@@ -111,15 +111,6 @@ describe('listing form checks', () => {
       district: 'Raipur',
       location: { type: 'Point', coordinates: [81.63, 21.25] },
     })
-  })
-})
-
-describe('photo badges', () => {
-  it('explains why a photo is unverified', () => {
-    expect(photoBadge(MEDIA('m', {})).label).toBe('Verified')
-    expect(photoBadge(MEDIA('m', { isGeoVerified: false, geoStatus: 'TOO_FAR', distanceM: 4200 })).detail).toBe('Taken 4.2 km from the farm.')
-    expect(photoBadge(MEDIA('m', { isGeoVerified: false, geoStatus: 'NO_GPS' })).label).toBe('Unverified')
-    expect(photoBadge(MEDIA('m', { status: 'PROCESSING', url: null, thumbUrl: null })).label).toBe('Checking')
   })
 })
 

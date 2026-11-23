@@ -52,7 +52,7 @@ describe('crop stages', () => {
 })
 
 describe('farmer crop updates', () => {
-  it('shows the timeline newest first with photo badges', async () => {
+  it('shows the timeline newest first', async () => {
     farmer({
       'GET /land/reservations/mine': () => jsonResponse([R({}), R({ id: 'r9', status: 'PENDING' })]),
       'GET /land/reservations/r1/updates': () => jsonResponse(UPDATES),
@@ -64,8 +64,6 @@ describe('farmer crop updates', () => {
     const items = Array.from(region.querySelectorAll(':scope > ol > li'))
     expect(items[0]).toHaveTextContent('Growing')
     expect(items.at(-1)).toHaveTextContent('Seeds in the ground')
-    expect(await within(card).findByText('Unverified')).toBeInTheDocument()
-    expect(within(card).getByText(': Taken 850 m from the plot.')).toBeInTheDocument()
     expect(within(card).getByRole('list', { name: 'Crop stages' }).querySelector('[aria-current="step"]')).toHaveTextContent('Growing')
     expect(screen.getAllByRole('article')).toHaveLength(1)
   })
