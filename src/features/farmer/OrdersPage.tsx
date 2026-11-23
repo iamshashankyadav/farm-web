@@ -123,6 +123,9 @@ function OrderRow({ order }: { order: OrderSummary }) {
           }
         />
         <p className="mt-1.5 text-sm text-ink-soft">{t(STATUS_TEXT[order.status])}</p>
+        {order.deliveryMode === 'FLEXIBLE' && order.status !== 'CANCELLED' && (
+          <p className="mt-1 text-sm text-ink-soft">{t('Shared delivery: the customer can wait, so it goes out with the daily batch. Pack it before the batch runs.')}</p>
+        )}
       </div>
       {error && (
         <p role="alert" className="mt-2 text-sm font-semibold text-danger">

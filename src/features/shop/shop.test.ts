@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { addressPayload, cartStore, cartTotals, freshness, journeyStep, refine, searchQuery, stepOf, type Produce } from './shop'
+import { addressPayload, batchWhen, cartStore, cartTotals, clock12, feesOf, freshness, journeyStep, refine, searchQuery, stepOf, waitsForBatch, whenParts, type Produce } from './shop'
 
 const produce = (over: Partial<Produce>): Produce => ({
   id: 'l1', farmId: 'f1', farmName: 'Sahu Farm', farmRating: null, farmRatingCount: 0, district: 'Durg', village: 'Patan',
@@ -74,5 +74,47 @@ describe('addressPayload', () => {
     expect(addressPayload({ ...ok, pincode: '49' })).toMatch(/pincode/)
     expect(addressPayload({ ...ok, line1: '' })).toMatch(/street/)
     expect(addressPayload({ ...ok, lat: '' })).toMatch(/location/)
+  })
+})
+
+describe('delivery mode', () => {
+  const lines = () => {
+    cartStore.clear()
+    cartStore.add(produce({}), 2)
+    cartStore.add(produce({ id: 'l2', farmId: 'f2' }), 1)
+    return cartStore.get()
+  }
+
+  it('charges the lower shared-delivery fee for each farm when the customer can wait', () => {
+    expect(cartTotals(lines(), 'IMMEDIATE').delivery).toBe(40)
+    expect(cartTotals(lines(), 'FLEXIBLE').delivery).toBe(20)
+  })
+
+  it('uses the fees the order service reports, and the fallback until it answers', () => {
+    expect(feesOf(undefined)).toEqual({ IMMEDIATE: 20, FLEXIBLE: 10 })
+    const fees = feesOf({ options: [{ mode: 'FLEXIBLE', feePerOrder: 5 }, { mode: 'IMMEDIATE', feePerOrder: 25 }], batchTime: '10:00', nextBatchAt: '' })
+    expect(cartTotals(lines(), 'FLEXIBLE', fees).delivery).toBe(10)
+    expect(cartTotals(lines(), 'IMMEDIATE', fees).delivery).toBe(50)
+  })
+
+  it('writes the batch time on a 12-hour clock', () => {
+    expect(clock12('10:00')).toBe('10:00 am')
+    expect(clock12('00:30')).toBe('12:30 am')
+    expect(clock12('15:05')).toBe('3:05 pm')
+  })
+
+  it('says whether the batch is today, tomorrow or on a later day (India time)', () => {
+    const now = new Date('2026-11-24T02:00:00Z') // 07:30 in India
+    expect(batchWhen('2026-11-24T04:30:00Z', now)).toBe('today 10:00 am')
+    expect(batchWhen('2026-11-25T04:30:00Z', now)).toBe('tomorrow 10:00 am')
+    expect(batchWhen('2026-11-28T04:30:00Z', now)).toMatch(/^Sat, 28 Nov, 10:00 am$/)
+    expect(whenParts('2026-11-24T04:30:00Z').length).toBe(2)
+  })
+
+  it('only a FLEXIBLE order that has not left yet waits for the batch', () => {
+    expect(waitsForBatch({ status: 'READY_FOR_DISPATCH', deliveryMode: 'FLEXIBLE' })).toBe(true)
+    expect(waitsForBatch({ status: 'POOLED', deliveryMode: 'FLEXIBLE' })).toBe(false)
+    expect(waitsForBatch({ status: 'READY_FOR_DISPATCH', deliveryMode: 'IMMEDIATE' })).toBe(false)
+    expect(waitsForBatch({ status: 'CONFIRMED' })).toBe(false)
   })
 })

@@ -1,6 +1,105 @@
 {
   "components": {
     "schemas": {
+      "BatchOrderOut": {
+        "properties": {
+          "address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Address"
+          },
+          "deliveryDate": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deliverydate"
+          },
+          "orderId": {
+            "format": "uuid",
+            "title": "Orderid",
+            "type": "string"
+          },
+          "route": {
+            "description": "Which of the estimated routes it would ride (1-based)",
+            "title": "Route",
+            "type": "integer"
+          },
+          "weightKg": {
+            "title": "Weightkg",
+            "type": "number"
+          }
+        },
+        "required": [
+          "orderId",
+          "weightKg",
+          "route"
+        ],
+        "title": "BatchOrderOut",
+        "type": "object"
+      },
+      "BatchPreview": {
+        "description": "The shared-delivery batch as it would run now (nothing is created).",
+        "properties": {
+          "batchTime": {
+            "description": "Daily run time, India, HH:MM",
+            "title": "Batchtime",
+            "type": "string"
+          },
+          "dueOrders": {
+            "description": "Of those, how many the next run would take (due by then)",
+            "title": "Dueorders",
+            "type": "integer"
+          },
+          "estimatedRoutes": {
+            "title": "Estimatedroutes",
+            "type": "integer"
+          },
+          "nextRunAt": {
+            "format": "date-time",
+            "title": "Nextrunat",
+            "type": "string"
+          },
+          "orders": {
+            "items": {
+              "$ref": "#/components/schemas/BatchOrderOut"
+            },
+            "title": "Orders",
+            "type": "array"
+          },
+          "totalWeightKg": {
+            "title": "Totalweightkg",
+            "type": "number"
+          },
+          "waitingOrders": {
+            "description": "FLEXIBLE orders packed and waiting",
+            "title": "Waitingorders",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "batchTime",
+          "nextRunAt",
+          "waitingOrders",
+          "dueOrders",
+          "estimatedRoutes",
+          "totalWeightKg",
+          "orders"
+        ],
+        "title": "BatchPreview",
+        "type": "object"
+      },
       "DeliverIn": {
         "properties": {
           "deliveredAt": {
@@ -135,6 +234,159 @@
         "title": "LocationPingIn",
         "type": "object"
       },
+      "OfferOut": {
+        "description": "A pool offered to the signed-in partner, still open (nobody has accepted it).",
+        "properties": {
+          "distanceKm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "From the partner to the first pickup",
+            "title": "Distancekm"
+          },
+          "dropCount": {
+            "title": "Dropcount",
+            "type": "integer"
+          },
+          "expiresAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Answer by this time; it stays open until someone accepts",
+            "title": "Expiresat"
+          },
+          "firstPickup": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OfferPlace"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "offeredAt": {
+            "format": "date-time",
+            "title": "Offeredat",
+            "type": "string"
+          },
+          "pickupCount": {
+            "title": "Pickupcount",
+            "type": "integer"
+          },
+          "poolDate": {
+            "format": "date",
+            "title": "Pooldate",
+            "type": "string"
+          },
+          "poolId": {
+            "format": "uuid",
+            "title": "Poolid",
+            "type": "string"
+          },
+          "stopCount": {
+            "title": "Stopcount",
+            "type": "integer"
+          },
+          "stops": {
+            "description": "Every stop in driving order, to draw the route",
+            "items": {
+              "$ref": "#/components/schemas/OfferStop"
+            },
+            "title": "Stops",
+            "type": "array"
+          },
+          "totalKm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Totalkm"
+          }
+        },
+        "required": [
+          "poolId",
+          "poolDate",
+          "stopCount",
+          "pickupCount",
+          "dropCount",
+          "offeredAt"
+        ],
+        "title": "OfferOut",
+        "type": "object"
+      },
+      "OfferPlace": {
+        "properties": {
+          "address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Address"
+          },
+          "lat": {
+            "title": "Lat",
+            "type": "number"
+          },
+          "lng": {
+            "title": "Lng",
+            "type": "number"
+          }
+        },
+        "required": [
+          "lat",
+          "lng"
+        ],
+        "title": "OfferPlace",
+        "type": "object"
+      },
+      "OfferStop": {
+        "description": "One stop of an offered route, in driving order. No address or customer: the partner has\nnot taken the route yet, so they only see where it goes.",
+        "properties": {
+          "lat": {
+            "title": "Lat",
+            "type": "number"
+          },
+          "lng": {
+            "title": "Lng",
+            "type": "number"
+          },
+          "seq": {
+            "title": "Seq",
+            "type": "integer"
+          },
+          "stopType": {
+            "$ref": "#/components/schemas/StopType"
+          }
+        },
+        "required": [
+          "seq",
+          "stopType",
+          "lat",
+          "lng"
+        ],
+        "title": "OfferStop",
+        "type": "object"
+      },
       "PickupIn": {
         "properties": {
           "collectedAt": {
@@ -226,6 +478,31 @@
             "format": "date",
             "title": "Pooldate",
             "type": "string"
+          },
+          "routePath": {
+            "anyOf": [
+              {
+                "items": {
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "prefixItems": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ],
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The road line through the stops in visiting order, as [lat, lng] pairs. Only sent by GET /my-route and when accepting an offer, and only when the routing engine found it; otherwise the client joins the stops with straight lines.",
+            "title": "Routepath"
           },
           "status": {
             "$ref": "#/components/schemas/PoolStatus"
@@ -791,6 +1068,128 @@
         ]
       }
     },
+    "/offers/mine": {
+      "get": {
+        "operationId": "my_offers_offers_mine_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/OfferOut"
+                  },
+                  "title": "Response My Offers Offers Mine Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Open route offers for the signed-in delivery partner",
+        "tags": [
+          "logistics"
+        ]
+      }
+    },
+    "/offers/{pool_id}/accept": {
+      "post": {
+        "operationId": "accept_route_offer_offers__pool_id__accept_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pool_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Pool Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PoolOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "409": {
+            "description": "POOL_TAKEN: another partner accepted first"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Take an offered route; the first partner to accept gets it",
+        "tags": [
+          "logistics"
+        ]
+      }
+    },
+    "/offers/{pool_id}/decline": {
+      "post": {
+        "operationId": "decline_route_offer_offers__pool_id__decline_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pool_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Pool Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Turn an offered route down",
+        "tags": [
+          "logistics"
+        ]
+      }
+    },
     "/orders/{order_id}/track": {
       "get": {
         "description": "Where the order is, who brings it and the delivery code. Only the customer of the order\n(and an admin) may see this; anyone else gets 404, as if the order had no route.",
@@ -895,9 +1294,36 @@
         ]
       }
     },
+    "/pools/batch": {
+      "get": {
+        "description": "FLEXIBLE orders that are packed and waiting, and how the next run would group them.",
+        "operationId": "batch_preview_pools_batch_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchPreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "The shared-delivery batch waiting for its next run (preview, creates nothing)",
+        "tags": [
+          "logistics"
+        ]
+      }
+    },
     "/pools/run": {
       "post": {
-        "description": "Fetch READY_FOR_DISPATCH orders, cluster them, persist pools, publish pool.assigned.",
+        "description": "Fetch READY_FOR_DISPATCH orders, cluster them, persist pools, publish pool.assigned.\n\nWith mode=FLEXIBLE this is the daily shared-delivery batch run by hand (\"run the batch now\").",
         "operationId": "run_pools_pools_run_post",
         "parameters": [
           {
@@ -910,6 +1336,28 @@
               "format": "date",
               "title": "Pool Date",
               "type": "string"
+            }
+          },
+          {
+            "description": "Pool only IMMEDIATE or only FLEXIBLE (the shared-delivery batch) orders; both when omitted",
+            "in": "query",
+            "name": "mode",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "IMMEDIATE",
+                    "FLEXIBLE"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Pool only IMMEDIATE or only FLEXIBLE (the shared-delivery batch) orders; both when omitted",
+              "title": "Mode"
             }
           }
         ],

@@ -35,6 +35,8 @@ export interface Pool {
 
 type PoolOut = LogisticsComponents['schemas']['PoolOut']
 type PoolRunResponse = LogisticsComponents['schemas']['PoolRunResponse']
+/** GET /logistics/pools/batch: the shared-delivery batch as the next run would group it. */
+export type BatchPreview = LogisticsComponents['schemas']['BatchPreview']
 
 const round1 = (km: number) => Math.round(km * 10) / 10
 
@@ -67,6 +69,11 @@ export const adminApi = {
   verifyFarmer: (userId: string) => api<UserRow>(`/identity/users/${userId}/verify-farmer`, { method: 'POST' }),
   /** GET /logistics/pools?pool_date (admin): the pools saved for that date. */
   pools: (date: string) => api<PoolOut[]>(`/logistics/pools?pool_date=${date}`).then((rows) => rows.map(toPool)),
+  /** GET /logistics/pools/batch (admin): FLEXIBLE orders waiting for the daily run, grouped into the routes it would make. */
+  batch: () => api<BatchPreview>('/logistics/pools/batch'),
+  /** POST /logistics/pools/run?mode=FLEXIBLE (admin): the daily shared-delivery batch, run by hand. */
+  runBatch: (date: string) =>
+    api<PoolRunResponse>(`/logistics/pools/run?pool_date=${date}&mode=FLEXIBLE`, { method: 'POST' }).then((r) => r.pools.map(toPool)),
   /** POST /logistics/pools/run?pool_date (admin) answers { poolsCreated, pools } for that date. */
   runPooling: (date: string) =>
     api<PoolRunResponse>(`/logistics/pools/run?pool_date=${date}`, { method: 'POST' }).then((r) => r.pools.map(toPool)),

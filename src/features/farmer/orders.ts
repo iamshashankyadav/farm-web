@@ -4,6 +4,9 @@ import type { OrderComponents } from '@/api/generated'
 /** Straight from the generated order contract, so a new status in the backend fails the build here. */
 export type OrderStatus = OrderComponents['schemas']['OrderStatus']
 
+/** IMMEDIATE: routed as soon as it is packed. FLEXIBLE: the customer accepts a later arrival, so it waits for the daily shared-delivery batch. */
+export type DeliveryMode = OrderComponents['schemas']['DeliveryMode']
+
 export interface OrderSummary {
   id: string
   orderType: 'PRODUCE' | 'HARVEST'
@@ -12,6 +15,10 @@ export interface OrderSummary {
   total: number
   /** The customer's score (1 to 5) once a completed order is rated. */
   ratingScore?: number | null
+  /** Missing on orders from before delivery modes existed: those are IMMEDIATE. */
+  deliveryMode?: DeliveryMode
+  /** FLEXIBLE orders not on a route yet: when the next batch that can take them runs (an estimate). */
+  batchAt?: string | null
   createdAt: string
 }
 
