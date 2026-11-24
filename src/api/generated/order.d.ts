@@ -32,8 +32,11 @@ export interface paths {
          * Orders logistics can pool (called by the logistics pooling job)
          * @description Orders in READY_FOR_DISPATCH whose delivery date is `date` or earlier.
          *
+         *     Logistics pools IMMEDIATE orders right after packing and FLEXIBLE ones in the daily batch, so
+         *     it asks for one mode at a time (`mode`); the admin "run now" button asks for both.
+         *
          *     The shape is what the logistics pooling job reads (snake_case keys, not the public camelCase):
-         *     `order_id`, `customer_id`, `hub_lat`/`hub_lng` (where the farm hands the produce over),
+         *     `order_id`, `delivery_mode`, `customer_id`, `hub_lat`/`hub_lng` (where the farm hands the produce over),
          *     `drop_lat`/`drop_lng` (the customer's address), `weight_kg`, `address` and `contact_phone`
          *     (so the partner can call the customer). Once logistics publishes `pool.assigned` the order
          *     moves to POOLED and no longer shows up here.
@@ -65,6 +68,26 @@ export interface paths {
          * @description The cart lives in the app; its items are sent here. The Idempotency-Key header is required: repeating a request with the same key and body returns the first result instead of creating new orders. After a PAYMENT_FAILED (402) use a new key to retry.
          */
         post: operations["checkout_orders_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orders/delivery-options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The delivery choices at checkout: immediate or shared (flexible)
+         * @description Fee per order and the time of the daily shared-delivery batch. Send the chosen `mode` as `deliveryMode` in POST /orders. Clients show this instead of hard-coding the fees.
+         */
+        get: operations["delivery_options_orders_delivery_options_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -288,6 +311,11 @@ export interface components {
              * @description Day the customer wants the delivery. Defaults to tomorrow. Orders due the same day are pooled into one route.
              */
             deliveryDate?: string | null;
+            /**
+             * @description IMMEDIATE (default): on a route as soon as the farmer packs it. FLEXIBLE: the customer accepts a later arrival; the order joins the daily shared-delivery batch (see GET /orders/delivery-options) and has a lower delivery fee.
+             * @default IMMEDIATE
+             */
+            deliveryMode: components["schemas"]["DeliveryMode"];
             /** Items */
             items: components["schemas"]["OrderItemIn"][];
             /** Notes */
@@ -331,6 +359,56 @@ export interface components {
              * @example 302001
              */
             pincode: string;
+        };
+        /**
+         * DeliveryMode
+         * @description How fast the customer wants the delivery.
+         *
+         *     IMMEDIATE: the order is put on a route as soon as the farmer packs it (partners are offered it
+         *     within seconds), at the normal delivery fee.
+         *     FLEXIBLE: the customer accepts a later arrival. Packed orders wait, and once a day (10:00
+         *     India time by default) logistics clusters every waiting FLEXIBLE order that is near each other
+         *     into shared routes, so one delivery partner serves a whole neighbourhood. Cheaper delivery fee.
+         * @enum {string}
+         */
+        DeliveryMode: "IMMEDIATE" | "FLEXIBLE";
+        /** DeliveryOption */
+        DeliveryOption: {
+            /** Description */
+            description: string;
+            /**
+             * Feeperorder
+             * @description Delivery fee charged for each farm's order
+             */
+            feePerOrder: number;
+            mode: components["schemas"]["DeliveryMode"];
+            /** Title */
+            title: string;
+        };
+        /**
+         * DeliveryOptions
+         * @description GET /orders/delivery-options: what the customer can choose at checkout (one source for the
+         *     website and the apps, so fees and the batch time are never hard-coded in a client).
+         */
+        DeliveryOptions: {
+            /**
+             * Batchtime
+             * @description Local time of the daily shared-delivery batch, HH:MM
+             */
+            batchTime: string;
+            /**
+             * Nextbatchat
+             * Format: date-time
+             * @description The next batch run from now
+             */
+            nextBatchAt: string;
+            /** Options */
+            options: components["schemas"]["DeliveryOption"][];
+            /**
+             * Timezone
+             * @default Asia/Kolkata
+             */
+            timezone: string;
         };
         /** ErrorBody */
         ErrorBody: {
@@ -396,6 +474,11 @@ export interface components {
              * @description DELIVERY only. Defaults to tomorrow, like checkout.
              */
             deliveryDate?: string | null;
+            /**
+             * @description DELIVERY only: IMMEDIATE or FLEXIBLE, as at checkout.
+             * @default IMMEDIATE
+             */
+            deliveryMode: components["schemas"]["DeliveryMode"];
             option: components["schemas"]["HarvestOption"];
             /**
              * Reservationid
@@ -408,6 +491,11 @@ export interface components {
          * @description One order per farm, inside a checkout. A HARVEST order is one order from one reservation.
          */
         Order: {
+            /**
+             * Batchat
+             * @description FLEXIBLE orders not yet on a route: when the next shared-delivery batch that can take this order runs (an estimate; it is the first batch after the delivery date). Empty once the order is on a route, and for IMMEDIATE orders.
+             */
+            batchAt?: string | null;
             /**
              * Checkoutid
              * Format: uuid
@@ -429,6 +517,8 @@ export interface components {
             deliveryDate?: string | null;
             /** Deliveryfee */
             deliveryFee: number;
+            /** @default IMMEDIATE */
+            deliveryMode: components["schemas"]["DeliveryMode"];
             /**
              * Farmid
              * @description Empty on a harvest order
@@ -473,6 +563,11 @@ export interface components {
              */
             balanceDue: number;
             /**
+             * Batchat
+             * @description FLEXIBLE orders not yet on a route: when the next shared-delivery batch that can take this order runs (an estimate; it is the first batch after the delivery date). Empty once the order is on a route, and for IMMEDIATE orders.
+             */
+            batchAt?: string | null;
+            /**
              * Checkoutid
              * Format: uuid
              */
@@ -493,6 +588,8 @@ export interface components {
             deliveryDate?: string | null;
             /** Deliveryfee */
             deliveryFee: number;
+            /** @default IMMEDIATE */
+            deliveryMode: components["schemas"]["DeliveryMode"];
             /** Events */
             events: components["schemas"]["OrderEvent"][];
             /**
@@ -647,6 +744,8 @@ export interface components {
          * @description A row of GET /orders.
          */
         OrderSummary: {
+            /** Batchat */
+            batchAt?: string | null;
             /**
              * Checkoutid
              * Format: uuid
@@ -662,6 +761,8 @@ export interface components {
              * @default INR
              */
             currency: string;
+            /** @default IMMEDIATE */
+            deliveryMode: components["schemas"]["DeliveryMode"];
             /** Farmid */
             farmId?: string | null;
             harvestOption?: components["schemas"]["HarvestOption"] | null;
@@ -871,6 +972,8 @@ export interface operations {
             query: {
                 /** @description Pool orders due on or before this day */
                 date: string;
+                /** @description Only IMMEDIATE or only FLEXIBLE orders; both when omitted */
+                mode?: components["schemas"]["DeliveryMode"] | null;
             };
             header?: never;
             path?: never;
@@ -1032,6 +1135,44 @@ export interface operations {
             };
             /** @description CATALOG_UNAVAILABLE */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delivery_options_orders_delivery_options_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeliveryOptions"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The token does not have the required role */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -24,6 +24,21 @@ test.describe('customer', () => {
     expect(problems).toEqual([])
   })
 
+  test('buy: "I can wait" switches to the shared-delivery fee and says when the batch runs', async ({ page, problems }) => {
+    await page.getByRole('list').getByRole('button', { name: /per (kg|quintal|piece|dozen|bunch)/ }).first().click()
+    await page.getByRole('button', { name: /Add to cart/ }).click()
+    await page.keyboard.press('Escape')
+    await nav(page).getByRole('link', { name: /^Cart/ }).click()
+    await expect(page.getByLabel(/Deliver as soon as possible/)).toBeChecked()
+    await expect(page.getByText('Delivery (1 farm)')).toBeVisible()
+    const fee = async () => Number((await page.getByText('Delivery (1 farm)').locator('xpath=following-sibling::dd').innerText()).replace(/[^\d.]/g, ''))
+    const normal = await fee()
+    await page.getByLabel(/I can wait/).check()
+    await expect(page.getByText(/Earliest shared run/)).toBeVisible()
+    expect(await fee()).toBeLessThan(normal)
+    expect(problems).toEqual([])
+  })
+
   test('orders: the list loads', async ({ page, problems }) => {
     await nav(page).getByRole('link', { name: 'Orders' }).click()
     await expect(page.getByRole('tablist', { name: 'Order status' })).toBeVisible()

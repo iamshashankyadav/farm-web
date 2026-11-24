@@ -185,6 +185,8 @@
           "ORDER_PACKED",
           "ORDER_READY_FOR_DISPATCH",
           "ORDER_POOLED",
+          "POOL_OFFER",
+          "POOL_OFFER_TAKEN",
           "ORDER_IN_TRANSIT",
           "ORDER_DELIVERED",
           "ORDER_COMPLETED",

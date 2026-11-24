@@ -2,7 +2,9 @@ import { useSyncExternalStore } from 'react'
 import { api } from '@/api/http'
 import { newId } from '@/api/id'
 import type { Tone } from '@/components/ui'
-import type { OrderDetail, OrderStatus, OrderSummary } from '@/features/farmer/orders'
+import type { DeliveryMode, OrderDetail, OrderStatus, OrderSummary } from '@/features/farmer/orders'
+
+export type { DeliveryMode }
 
 /* ------------------------------------------------------------------ catalog search */
 
@@ -214,14 +216,56 @@ export const cartStore = {
 
 export const useCart = () => useSyncExternalStore(cartStore.subscribe, cartStore.get, cartStore.get)
 
-/** What the order service adds per farm: the order service charges this for each farm's order. */
-export const DELIVERY_FEE_PER_FARM = 20
+/** The fee per farm for each delivery mode. Only a fallback: the real fees come from GET /order/orders/delivery-options. */
+export const FALLBACK_FEES: Record<DeliveryMode, number> = { IMMEDIATE: 20, FLEXIBLE: 10 }
+export const DELIVERY_FEE_PER_FARM = FALLBACK_FEES.IMMEDIATE
 
-export function cartTotals(lines: CartLine[]) {
+export function cartTotals(lines: CartLine[], mode: DeliveryMode = 'IMMEDIATE', fees: Record<DeliveryMode, number> = FALLBACK_FEES) {
   const subtotal = lines.reduce((sum, l) => sum + Math.round(l.unitPrice * l.qty * 100) / 100, 0)
   const farms = new Set(lines.map((l) => l.farmId)).size
-  const delivery = farms * DELIVERY_FEE_PER_FARM
+  const delivery = farms * fees[mode]
   return { subtotal, farms, delivery, total: subtotal + delivery }
+}
+
+/** What the customer can choose at checkout, from GET /order/orders/delivery-options. */
+export interface DeliveryOptions {
+  options: { mode: DeliveryMode; feePerOrder: number }[]
+  /** Local time of the daily shared-delivery batch, "HH:MM". */
+  batchTime: string
+  nextBatchAt: string
+}
+
+export const deliveryOptionsApi = { get: () => api<DeliveryOptions>('/order/orders/delivery-options') }
+
+export function feesOf(o: DeliveryOptions | undefined): Record<DeliveryMode, number> {
+  const fees = { ...FALLBACK_FEES }
+  for (const x of o?.options ?? []) fees[x.mode] = x.feePerOrder
+  return fees
+}
+
+/** "10:00" -> "10:00 am" */
+export function clock12(hhmm: string): string {
+  const [h, m] = hhmm.split(':').map(Number)
+  return `${h! % 12 || 12}:${String(m ?? 0).padStart(2, '0')} ${h! < 12 ? 'am' : 'pm'}`
+}
+
+/** When a shared-delivery batch runs, in words: "today 10:00 am", "tomorrow 10:00 am" or "Fri, 28 Nov, 10:00 am". */
+export function batchWhen(iso: string, now: Date = new Date()): string {
+  const at = new Date(iso)
+  const time = at.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' })
+  const day = (d: Date) => d.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })
+  const tomorrow = new Date(now.getTime() + 24 * 3600 * 1000)
+  if (day(at) === day(now)) return `today ${time}`
+  if (day(at) === day(tomorrow)) return `tomorrow ${time}`
+  return `${at.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' })}, ${time}`
+}
+
+/** "today 10:00 am" -> the translation key and its words, so the day can be translated. */
+export function whenParts(iso: string): [string, Record<string, string>] {
+  const w = batchWhen(iso)
+  const [day, ...rest] = w.split(' ')
+  if (day === 'today' || day === 'tomorrow') return [day === 'today' ? 'today {time}' : 'tomorrow {time}', { time: rest.join(' ') }]
+  return ['{when}', { when: w }]
 }
 
 /* ------------------------------------------------------------------ checkout and the customer's orders */
@@ -256,8 +300,9 @@ export function addressPayload(f: AddressForm): Address | string {
 export interface Checkout {
   id: string
   total: number
+  deliveryFee: number
   paymentStatus: 'PENDING' | 'SUCCEEDED' | 'FAILED' | 'REFUNDED'
-  orders: { id: string }[]
+  orders: { id: string; deliveryMode?: DeliveryMode; batchAt?: string | null }[]
 }
 
 export const customerOrdersApi = {
@@ -268,8 +313,15 @@ export const customerOrdersApi = {
     api(`/order/orders/${id}/rating`, { method: 'POST', body: { score, ...(comment.trim() ? { comment: comment.trim() } : {}) } }),
   track: (id: string) => api<Tracking>(`/logistics/orders/${id}/track`),
   /** Pays the total, then places the orders. A new key per attempt; the same key on a retry never orders twice. */
-  async checkout(lines: CartLine[], address: Address, notes: string, key: string): Promise<Checkout> {
-    const { total } = cartTotals(lines)
+  async checkout(
+    lines: CartLine[],
+    address: Address,
+    notes: string,
+    key: string,
+    mode: DeliveryMode = 'IMMEDIATE',
+    fees: Record<DeliveryMode, number> = FALLBACK_FEES,
+  ): Promise<Checkout> {
+    const { total } = cartTotals(lines, mode, fees)
     const intent = await api<{ id: string }>('/order/orders/payments/intent', { method: 'POST', body: { amount: total, kind: 'FULL' } })
     return api<Checkout>('/order/orders', {
       method: 'POST',
@@ -277,6 +329,7 @@ export const customerOrdersApi = {
       body: {
         items: lines.map((l) => ({ listingId: l.listingId, qty: l.qty })),
         deliveryAddress: address,
+        deliveryMode: mode,
         paymentIntentId: intent.id,
         ...(notes.trim() ? { notes: notes.trim() } : {}),
       },
@@ -317,6 +370,12 @@ export const ORDER_TEXT: Record<OrderStatus, { label: string; tone: Tone; next: 
   COMPLETED: { label: 'Completed', tone: 'good', next: 'All done. Tell us how it went.' },
   CANCELLED: { label: 'Cancelled', tone: 'neutral', next: 'This order was cancelled and the payment refunded.' },
 }
+
+/** Statuses before an order is on a route: a FLEXIBLE order still waits for the shared-delivery batch. */
+const BEFORE_ROUTE: OrderStatus[] = ['PLACED', 'CONFIRMED', 'PACKED', 'READY_FOR_DISPATCH']
+
+/** True for an order the customer let wait for the shared-delivery batch, which has not left yet. */
+export const waitsForBatch = (o: { status: OrderStatus; deliveryMode?: DeliveryMode }) => o.deliveryMode === 'FLEXIBLE' && BEFORE_ROUTE.includes(o.status)
 
 /** Position on the journey for the status bar; cancelled is shown apart. */
 export const JOURNEY: OrderStatus[] = ['CONFIRMED', 'PACKED', 'POOLED', 'IN_TRANSIT', 'DELIVERED', 'COMPLETED']

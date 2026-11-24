@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router'
 import { ApiError } from '@/api/http'
@@ -11,7 +11,11 @@ import {
   cartStore,
   cartTotals,
   customerOrdersApi,
-  DELIVERY_FEE_PER_FARM,
+  whenParts,
+  clock12,
+  deliveryOptionsApi,
+  feesOf,
+  type DeliveryMode,
   newCheckoutKey,
   PLACES,
   rupees,
@@ -47,11 +51,15 @@ export function CartPage() {
   const [error, setError] = useState('')
   const [locating, setLocating] = useState(false)
   const key = useRef(newCheckoutKey())
-  const totals = cartTotals(lines)
+  const [mode, setMode] = useState<DeliveryMode>('IMMEDIATE')
+  // fees and the batch time come from the order service; the fallback fees apply while it loads or if it is down
+  const options = useQuery({ queryKey: ['delivery-options'], queryFn: deliveryOptionsApi.get, staleTime: 5 * 60_000, retry: 1 })
+  const fees = feesOf(options.data)
+  const totals = cartTotals(lines, mode, fees)
   const over = lines.filter((l) => l.qty > l.maxQty)
 
   const order = useMutation({
-    mutationFn: (address: Address) => customerOrdersApi.checkout(lines, address, '', key.current),
+    mutationFn: (address: Address) => customerOrdersApi.checkout(lines, address, '', key.current, mode, fees),
     onSuccess: (checkout) => {
       try {
         localStorage.setItem('farm.address', JSON.stringify(form))
@@ -78,6 +86,11 @@ export function CartPage() {
             ? t('Nothing was charged and your cart is empty. Add the items again to retry.')
             : t('The farmer has been told. You can follow every step, and the delivery code, under My orders.')}
         </p>
+        {placed.paymentStatus !== 'FAILED' && placed.orders[0]?.deliveryMode === 'FLEXIBLE' && placed.orders[0].batchAt && (
+          <p className="mt-3 rounded-lg bg-paper p-3 text-sm">
+            {t('You chose shared delivery. Once packed, your order leaves in our {when} batch, together with other orders near you.', { when: t(...whenParts(placed.orders[0].batchAt)) })}
+          </p>
+        )}
         <div className="mt-5 flex flex-wrap gap-3">
           <Link to="/customer/orders" className="btn-primary">
             {t('Track my orders')}
@@ -220,6 +233,8 @@ export function CartPage() {
           </span>
         </div>
 
+        <DeliveryChoice mode={mode} onChange={setMode} fees={fees} batchTime={options.data?.batchTime ?? '10:00'} nextBatchAt={options.data?.nextBatchAt} />
+
         <dl className="space-y-1.5 border-t border-line pt-4">
           <div className="flex justify-between">
             <dt className="text-ink-soft">{t('Items')}</dt>
@@ -235,7 +250,7 @@ export function CartPage() {
             <dt>{t('Total')}</dt>
             <dd className="tabular-nums">{rupees(totals.total)}</dd>
           </div>
-          <p className="text-xs text-ink-soft">{t('Each farm packs and ships its own order, with a delivery fee of {fee} each. Payments are simulated in this project.', { fee: rupees(DELIVERY_FEE_PER_FARM) })}</p>
+          <p className="text-xs text-ink-soft">{t('Each farm packs and ships its own order, with a delivery fee of {fee} each. Payments are simulated in this project.', { fee: rupees(fees[mode]) })}</p>
         </dl>
 
         {error && (
@@ -247,6 +262,57 @@ export function CartPage() {
           {order.isPending ? t('Placing your order…') : t('Pay {total} and place order', { total: rupees(totals.total) })}
         </button>
       </form>
+    </div>
+  )
+}
+
+/** Deliver now, or let the order wait for the daily shared-delivery batch and pay less. */
+function DeliveryChoice({
+  mode,
+  onChange,
+  fees,
+  batchTime,
+  nextBatchAt,
+}: {
+  mode: DeliveryMode
+  onChange: (m: DeliveryMode) => void
+  fees: Record<DeliveryMode, number>
+  batchTime: string
+  nextBatchAt?: string
+}) {
+  const { t } = useI18n()
+  const clock = clock12(batchTime)
+  const choices: { mode: DeliveryMode; title: string; body: string }[] = [
+    { mode: 'IMMEDIATE', title: t('Deliver as soon as possible'), body: t('On a delivery route as soon as the farmer packs your order.') },
+    {
+      mode: 'FLEXIBLE',
+      title: t('I can wait: shared delivery'),
+      body: t('Your order joins our daily {clock} batch, where orders from nearby homes share one delivery partner. It arrives later, and costs less.', { clock }),
+    },
+  ]
+  return (
+    <div className="border-t border-line pt-4">
+      <fieldset className="space-y-2">
+        <legend className="mb-2 font-display text-2xl">{t('How soon do you need it?')}</legend>
+        {choices.map((c) => (
+          <label
+            key={c.mode}
+            className={`flex min-h-11 cursor-pointer items-start gap-3 rounded-lg border-[1.5px] p-3 ${mode === c.mode ? 'border-primary bg-primary/10' : 'border-line-strong bg-surface-card hover:bg-paper'}`}
+          >
+            <input type="radio" name="delivery-mode" value={c.mode} checked={mode === c.mode} onChange={() => onChange(c.mode)} className="mt-1 size-4 accent-[var(--color-primary)]" />
+            <span className="min-w-0 flex-1">
+              <span className="flex flex-wrap items-baseline justify-between gap-x-3">
+                <span className="font-semibold">{c.title}</span>
+                <span className="text-sm font-semibold tabular-nums">{t('{fee} per farm', { fee: rupees(fees[c.mode]) })}</span>
+              </span>
+              <span className="block text-sm text-ink-soft">{c.body}</span>
+            </span>
+          </label>
+        ))}
+        {mode === 'FLEXIBLE' && nextBatchAt && (
+          <p className="text-sm text-ink-soft">{t('Earliest shared run: {when}. Orders the farmer packs after a run go out in the next one.', { when: t(...whenParts(nextBatchAt)) })}</p>
+        )}
+      </fieldset>
     </div>
   )
 }
